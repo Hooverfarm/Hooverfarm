@@ -1,0 +1,284 @@
+local library = {}
+
+library.__index = library
+
+function library:Tween(asset, info, thing)
+	game:GetService("TweenService"):Create(asset, info, thing):Play()
+end
+
+function library:RoundNumber(num, numDecimalPlaces)
+	return tonumber(string.format("%." .. (numDecimalPlaces or 0) .. "f", num))
+end
+
+function library.Create(title, titleUnder)
+	local lib = {}
+
+	lib.UI = game:GetObjects("rbxassetid://6911784266")[1]
+	lib.UI.Parent = game.CoreGui
+
+	lib.Tabs = {}
+
+	local MainFrame = lib.UI.Main
+
+	--Dragging
+	local dragging
+	local dragInput
+	local dragStart
+	local startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		game:GetService("TweenService"):Create(MainFrame, TweenInfo.new(0.1), {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}):Play()
+	end
+
+	MainFrame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = MainFrame.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	MainFrame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	game:GetService("UserInputService").InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+
+	return setmetatable(lib, library)
+end
+
+function library:Tab()
+	local tab = {}
+
+	tab.Assets = {}
+
+	tab.Lib = self
+
+	table.insert(self.Tabs, tab)
+
+	return setmetatable(tab, library)
+end
+
+function library:Toggle(text, info, state, callback)
+	local toggle = {}
+
+	toggle.callback = callback or function() end
+	toggle.debounce = false
+	toggle.state = state
+	toggle.toggle = self.Lib.UI.Main.Container.Toggle:Clone()
+	toggle.toggle.Parent = self.Lib.UI.Main.Container
+	toggle.toggle:FindFirstChild("Text").Text = (text or "No Text")
+	toggle.toggle.Name = (text or "No Text")
+
+	toggle.toggle.Visible = true
+
+	toggle.Refresh = function()
+		if toggle.state then
+			toggle.state = false
+			toggle.debounce = true
+			spawn(function()
+				toggle.callback(toggle.state)
+			end)
+			local circle = toggle.toggle.Whole.Inner
+			local newPosition = UDim2.new((circle.Position.X.Scale / 3), circle.Position.X.Offset, circle.Position.Y.Scale, circle.Position.Y.Offset)
+
+			library:Tween(circle, TweenInfo.new(0.2), {Position = newPosition})
+			library:Tween(circle.Parent, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(213, 213, 213)})
+
+			wait(0.3)
+			toggle.debounce = false
+		else 
+			toggle.state = true
+			toggle.debounce = true
+			spawn(function()
+				toggle.callback(toggle.state)
+			end)
+			local circle = toggle.toggle.Whole.Inner
+			local newPosition = UDim2.new((circle.Position.X.Scale * 3), circle.Position.X.Offset, circle.Position.Y.Scale, circle.Position.Y.Offset)
+
+			library:Tween(circle, TweenInfo.new(0.2), {Position = newPosition})
+			library:Tween(circle.Parent, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(248, 86, 86)})
+
+			wait(0.3)
+			toggle.debounce = false
+		end
+	end
+
+	spawn(function()
+		if toggle.state then
+			toggle.debounce = true
+			local circle = toggle.toggle.Whole.Inner
+			local newPosition = UDim2.new((circle.Position.X.Scale * 3), circle.Position.X.Offset, circle.Position.Y.Scale, circle.Position.Y.Offset)
+
+			library:Tween(circle, TweenInfo.new(0.2), {Position = newPosition})
+			library:Tween(circle.Parent, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(248, 86, 86)})
+
+			wait(0.3)
+			toggle.debounce = false
+		end
+	end)
+
+	toggle.toggle.MouseButton1Up:Connect(function(x,y)
+		if not toggle.debounce then
+			toggle.Refresh()
+		end
+	end)
+
+	local ran, failed = pcall(function()
+		toggle.callback(toggle.state)
+	end)
+
+	if ran then
+		print("Ran sucessfully.")
+	else
+		print("Failed to run but no worries!", failed)
+	end
+
+	table.insert(self.Assets, toggle)
+	return setmetatable(toggle, library)
+end
+
+function library:Seperator()
+	local seperator = {}
+
+	seperator.asset = self.Lib.UI.Main.Container.Seperator:Clone()
+	seperator.asset.Parent = self.Lib.UI.Main.Container
+
+	seperator.asset.Visible = true
+
+	table.insert(self.Assets, seperator)
+	return setmetatable(seperator, library)
+end
+
+function library:Slider(name, min, max, starting, callback)
+	local slider = {}
+
+	slider.callback = callback or function() end
+	slider.min = min or 1
+	slider.max = max or 100
+
+	slider.asset = self.Lib.UI.Main.Container.Slider:Clone()
+	slider.asset.Name = (name or "None")
+	slider.asset:FindFirstChild("Slider").Text = (name or "None")
+	slider.asset.Parent = self.Lib.UI.Main.Container
+	slider.holdAsset = self.Lib.UI.Main.Container
+
+	slider.holdAsset = slider.asset.Holder.Holder.Circle
+
+	-----Variables-----
+	local mouse = game.Players.LocalPlayer:GetMouse()
+	local uis = game:GetService("UserInputService")
+	local Value;
+
+	-----Main Code-----
+
+	local bound = slider.holdAsset.Parent.Parent.AbsoluteSize.X
+	
+	function slider.Refresh(new, bool)
+		local pos = (bound * (new/slider.max))
+
+		library:Tween(slider.holdAsset.Parent, TweenInfo.new(0.1), {Size = UDim2.new(0, pos, 1, 0)})
+
+		slider.asset.Percentage.Text = new
+		
+		if bool then
+			slider.callback(new)
+		end
+	end
+	
+	slider.Refresh(starting)
+	
+	slider.holdAsset.MouseButton1Down:Connect(function()
+		local Num = (((tonumber(slider.max) - tonumber(slider.min)) / bound) * slider.holdAsset.Parent.AbsoluteSize.X) + tonumber(slider.min)
+		local IsDecimal = select(2, math.modf(starting)) ~= 0
+		print(IsDecimal)
+		Value = (not IsDecimal and math.ceil(Num)) or (IsDecimal and library:RoundNumber(Num, 1)) or 0
+		pcall(function()
+			slider.callback(Value)
+		end)
+		library:Tween(slider.holdAsset.Parent, TweenInfo.new(0.1), {Size = UDim2.new(0, math.clamp(mouse.X - slider.holdAsset.Parent.AbsolutePosition.X, 0, bound), 1, 0)})
+		moveconnection = mouse.Move:Connect(function()
+			slider.asset.Percentage.Text = Value
+			local Num = (((tonumber(slider.max) - tonumber(slider.min)) / bound) * slider.holdAsset.Parent.AbsoluteSize.X) + tonumber(slider.min)
+			local IsDecimal = select(2, math.modf(starting)) ~= 0
+			Value = (not IsDecimal and math.ceil(Num)) or (IsDecimal and library:RoundNumber(Num, 1))
+			pcall(function()
+				slider.callback(Value)
+			end)
+			print((mouse.X - slider.holdAsset.Parent.AbsolutePosition.X))
+			library:Tween(slider.holdAsset.Parent, TweenInfo.new(0.1), {Size = UDim2.new(0, math.clamp(mouse.X - slider.holdAsset.Parent.AbsolutePosition.X, 0, bound), 1, 0)})
+		end)
+		releaseconnection = uis.InputEnded:Connect(function(Mouse)
+			if Mouse.UserInputType == Enum.UserInputType.MouseButton1 then
+				local Num = (((tonumber(slider.max) - tonumber(slider.min)) / bound) * slider.holdAsset.Parent.AbsoluteSize.X) + tonumber(slider.min)
+				local IsDecimal = select(2, math.modf(starting)) ~= 0
+				Value = (not IsDecimal and math.ceil(Num)) or (IsDecimal and library:RoundNumber(Num, 1)) 
+				pcall(function()
+					slider.callback(Value)
+				end)
+				library:Tween(slider.holdAsset.Parent, TweenInfo.new(0.1), {Size = UDim2.new(0, math.clamp(mouse.X - slider.holdAsset.Parent.AbsolutePosition.X, 0, bound), 1, 0)})
+				moveconnection:Disconnect()
+				releaseconnection:Disconnect()
+				
+				wait()
+				slider.Refresh(Value, true)
+			end
+		end)
+	end)
+	
+	slider.asset.Visible = true
+
+	table.insert(self.Assets, slider)
+	return setmetatable(slider, library)
+end
+
+function library:Label(text)
+	local label = {}
+
+	label.asset = self.Lib.UI.Main.Container.Label:Clone()
+	label.asset.Parent = self.Lib.UI.Main.Container
+
+	label.class = "label"
+
+	function label.Refresh(newText)
+		label.asset:FindFirstChild("Text").Text = newText
+	end
+
+	label.Refresh(text)
+
+	label.asset.Visible = true
+
+	table.insert(self.Assets, label)
+	return setmetatable(label, library)
+end
+
+function library:Update(new, new2, new3)
+	if self.table then
+		self.table = new
+		self.Refresh()
+	elseif self.min and self.max then
+		self.min = new
+		self.max = new2
+		self.Refresh(new3 or self.max/2, true)
+	elseif self.toggle then
+		if new ~= self.state then
+			--self.state = (not new)
+			self.Refresh()
+		end
+	elseif self.class == "label" then
+		self.Refresh(new)
+	end
+end
