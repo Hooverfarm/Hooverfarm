@@ -282,3 +282,5 @@ function library:Update(new, new2, new3)
 		self.Refresh(new)
 	end
 end
+
+return library
