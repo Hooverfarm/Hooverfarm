@@ -12,7 +12,9 @@ h1 {
 }
 
 img {
-  border-radius: 6px;
+  height:300px;
+  position:absolute;
+  box-sizing:border-box;: 6px;
   border-style: groove;
   height: 250px;
   float: left;
